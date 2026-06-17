@@ -1,12 +1,10 @@
-# Render Blueprint — backend web service + managed PostgreSQL.
-# Deploy via Render Dashboard → "New" → "Blueprint" and point it at this repo.
-# After the first deploy, fill in the `sync: false` secrets in the dashboard.
-
-databases:
-  - name: weightcalc-db
-    plan: free
-    databaseName: weightcalc
-    user: weightcalc
+# Render Blueprint — backend web service only.
+# The database is on Supabase (created via Vercel), so Render does NOT
+# provision a DB — DATABASE_URL is set manually (see below).
+#
+# NOTE: Render reads this file from the REPOSITORY ROOT. If your repo root is
+# the WeigtCalc folder, move render.yaml back up to it and keep `rootDir: w_back`.
+# If you push w_back as its own repo, delete the `rootDir` line.
 
 services:
   - type: web
@@ -26,10 +24,10 @@ services:
         value: production
       - key: NODE_VERSION
         value: '22' # argon2 ships prebuilt binaries for Node 22
+      # Supabase Session-pooler URI (port 5432 on the *.pooler.supabase.com host),
+      # with ?sslmode=require appended. Set this in the dashboard.
       - key: DATABASE_URL
-        fromDatabase:
-          name: weightcalc-db
-          property: connectionString
+        sync: false
       # 32+ char secrets, generated and stored by Render.
       - key: JWT_ACCESS_SECRET
         generateValue: true
