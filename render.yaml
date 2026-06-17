@@ -2,16 +2,14 @@
 # The database is on Supabase (created via Vercel), so Render does NOT
 # provision a DB — DATABASE_URL is set manually (see below).
 #
-# NOTE: Render reads this file from the REPOSITORY ROOT. If your repo root is
-# the WeigtCalc folder, move render.yaml back up to it and keep `rootDir: w_back`.
-# If you push w_back as its own repo, delete the `rootDir` line.
+# This repo's root IS the backend (package.json at the top level), so there is
+# no `rootDir` — build/start run at the repository root.
 
 services:
   - type: web
     name: weightcalc-api
     runtime: node
     plan: free
-    rootDir: w_back
     region: frankfurt # pick the region closest to your users
     healthCheckPath: /health
     # NODE_ENV=production makes npm skip devDeps, but we need tsc/prisma/tsx
