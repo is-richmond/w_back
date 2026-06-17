@@ -1,0 +1,47 @@
+# Render Blueprint — backend web service + managed PostgreSQL.
+# Deploy via Render Dashboard → "New" → "Blueprint" and point it at this repo.
+# After the first deploy, fill in the `sync: false` secrets in the dashboard.
+
+databases:
+  - name: weightcalc-db
+    plan: free
+    databaseName: weightcalc
+    user: weightcalc
+
+services:
+  - type: web
+    name: weightcalc-api
+    runtime: node
+    plan: free
+    rootDir: w_back
+    region: frankfurt # pick the region closest to your users
+    healthCheckPath: /health
+    # NODE_ENV=production makes npm skip devDeps, but we need tsc/prisma/tsx
+    # to build + run migrations, so force them in with --include=dev.
+    buildCommand: npm ci --include=dev && npm run prisma:generate && npm run build
+    # Apply pending migrations on every deploy, then boot.
+    startCommand: npm run prisma:deploy && npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: '22' # argon2 ships prebuilt binaries for Node 22
+      - key: DATABASE_URL
+        fromDatabase:
+          name: weightcalc-db
+          property: connectionString
+      # 32+ char secrets, generated and stored by Render.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_INITIATION_SECRET
+        generateValue: true
+      # Secrets you must set manually in the dashboard:
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      # Your Vercel origin, e.g. https://weightcalc.vercel.app
+      - key: CORS_ORIGIN
+        sync: false

@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
@@ -35,7 +35,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(resendPlugin);
 
   // ── Centralised error handling ─────────────────────────────────────
-  app.setErrorHandler((error, req, reply) => {
+  app.setErrorHandler((error: FastifyError, req, reply) => {
     if (error instanceof AuthError) {
       return reply.code(error.statusCode).send({
         statusCode: error.statusCode,
