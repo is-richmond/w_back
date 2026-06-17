@@ -1,0 +1,122 @@
+// Prisma schema for WeightCalc — PostgreSQL
+// Run `npm run prisma:migrate` after editing.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// User
+// ─────────────────────────────────────────────────────────────────────────
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  // Argon2id hash of the 4-digit PIN. Null until the user completes onboarding.
+  pinHash      String?  @map("pin_hash")
+  // Optional profile fields used by the analytics calorie budget.
+  displayName  String?  @map("display_name")
+  dailyCalorieGoal Int?  @map("daily_calorie_goal")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  otps        AuthOtp[]
+  weightLogs  WeightLog[]
+  meals       Meal[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// AuthOtp — one-time passwords for passwordless login
+// ─────────────────────────────────────────────────────────────────────────
+model AuthOtp {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  // SHA-256 hash of the 6-digit code; the plaintext is only ever emailed.
+  codeHash  String    @map("code_hash")
+  expiresAt DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Fast lookup of the freshest unconsumed code for a user.
+  @@index([userId, expiresAt])
+  @@map("auth_otps")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// WeightLog — one body-weight measurement
+// ─────────────────────────────────────────────────────────────────────────
+model WeightLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  // Stored in kilograms with 2 decimals.
+  weightKg    Decimal  @map("weight_kg") @db.Decimal(6, 2)
+  // The calendar day the measurement is attributed to.
+  loggedFor   DateTime @map("logged_for") @db.Date
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One measurement per user per day; also serves date-range queries.
+  @@unique([userId, loggedFor])
+  @@index([userId, loggedFor])
+  @@map("weight_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Meal — a logged eating occasion (breakfast, lunch, …)
+// ─────────────────────────────────────────────────────────────────────────
+model Meal {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String
+  mealType  MealType @default(OTHER) @map("meal_type")
+  // The calendar day this meal belongs to (drives the daily diary + analytics).
+  loggedFor DateTime @map("logged_for") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items MealItem[]
+
+  // Daily diary + analytics aggregation by day.
+  @@index([userId, loggedFor])
+  @@map("meals")
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  OTHER
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MealItem — a single food entry within a meal
+// ─────────────────────────────────────────────────────────────────────────
+model MealItem {
+  id        String  @id @default(uuid()) @db.Uuid
+  mealId    String  @map("meal_id") @db.Uuid
+  name      String
+  // Macros are stored per the portion described by `grams`.
+  grams     Decimal @db.Decimal(8, 2)
+  calories  Decimal @db.Decimal(8, 2)
+  proteins  Decimal @db.Decimal(8, 2)
+  fats      Decimal @db.Decimal(8, 2)
+  carbs     Decimal @db.Decimal(8, 2)
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@index([mealId])
+  @@map("meal_items")
+}
