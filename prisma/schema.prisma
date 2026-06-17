@@ -18,9 +18,14 @@ model User {
   email        String   @unique
   // Argon2id hash of the 4-digit PIN. Null until the user completes onboarding.
   pinHash      String?  @map("pin_hash")
-  // Optional profile fields used by the analytics calorie budget.
+  // Optional profile fields used by analytics + the AI recommendation.
   displayName  String?  @map("display_name")
+  // e.g. "набрать мышечную массу", "похудеть", "поддержание формы"
+  goalType     String?  @map("goal_type")
   dailyCalorieGoal Int?  @map("daily_calorie_goal")
+  proteinTargetG   Int?  @map("protein_target_g")
+  fatTargetG       Int?  @map("fat_target_g")
+  carbTargetG      Int?  @map("carb_target_g")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

@@ -42,11 +42,18 @@ const MealOut = Type.Object({
   }),
 });
 
+// On create the user only supplies a name and (optionally) a weight — the AI
+// computes the macros. A missing weight means "assume a standard portion".
+const CreateItemInput = Type.Object({
+  name: Type.String({ minLength: 1, maxLength: 120 }),
+  grams: Type.Optional(Type.Number({ minimum: 0, maximum: 5000 })),
+});
+
 const CreateMealBody = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 120 }),
   mealType: Type.Optional(MealTypeEnum),
   loggedFor: Type.Optional(IsoDate),
-  items: Type.Array(MealItemInput, { minItems: 1, maxItems: 50 }),
+  items: Type.Array(CreateItemInput, { minItems: 1, maxItems: 30 }),
 });
 
 const RepeatMealBody = Type.Object({
@@ -111,18 +118,30 @@ function serializeMeal(meal: {
 const mealsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.addHook('onRequest', app.authenticate);
 
-  // ── POST /meals — log a meal with its items ────────────────────────
+  // ── POST /meals — log a meal; AI computes KБЖУ from name + weight ──
   app.post(
     '/',
     { schema: { body: CreateMealBody, response: { 201: MealOut } } },
     async (req, reply) => {
+      // Ask Llama (via Groq) to turn "name + optional weight" into macros.
+      const analyzed = await app.groq.analyzeFood(req.body.items);
+
       const meal = await app.prisma.meal.create({
         data: {
           userId: req.userId,
           name: req.body.name,
           mealType: req.body.mealType ?? 'OTHER',
           loggedFor: toDay(req.body.loggedFor),
-          items: { create: req.body.items },
+          items: {
+            create: analyzed.map((a) => ({
+              name: a.name,
+              grams: a.grams,
+              calories: a.calories,
+              proteins: a.proteins,
+              fats: a.fats,
+              carbs: a.carbs,
+            })),
+          },
         },
         include: { items: true },
       });

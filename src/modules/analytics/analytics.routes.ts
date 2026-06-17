@@ -6,6 +6,16 @@ const DashboardQuery = Type.Object({
   days: Type.Optional(Type.Integer({ minimum: 7, maximum: 365, default: 30 })),
 });
 
+const RecommendationResponse = Type.Object({
+  recommendation: Type.String(),
+  totals: Type.Object({
+    calories: Type.Number(),
+    proteins: Type.Number(),
+    fats: Type.Number(),
+    carbs: Type.Number(),
+  }),
+});
+
 const DailyPoint = Type.Object({
   date: Type.String(),
   calories: Type.Number(),
@@ -123,6 +133,76 @@ const analyticsRoutes: FastifyPluginAsyncTypebox = async (app) => {
           latestWeightKg: latestWeight,
           weightChangeKg: weightChange,
           daysLogged: loggedDays.length,
+        },
+      });
+    },
+  );
+
+  // ── GET /analytics/recommendation — AI advice from today's totals ──
+  app.get(
+    '/recommendation',
+    {
+      schema: {
+        querystring: Type.Object({ date: Type.Optional(Type.String({ format: 'date' })) }),
+        response: { 200: RecommendationResponse },
+      },
+    },
+    async (req, reply) => {
+      const day = req.query.date
+        ? new Date(`${req.query.date}T00:00:00.000Z`)
+        : new Date();
+      const today = new Date(
+        Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()),
+      );
+
+      const meals = await app.prisma.meal.findMany({
+        where: { userId: req.userId, loggedFor: today },
+        include: { items: true },
+      });
+      const totals = meals
+        .flatMap((m) => m.items)
+        .reduce(
+          (acc, i) => ({
+            calories: acc.calories + Number(i.calories),
+            proteins: acc.proteins + Number(i.proteins),
+            fats: acc.fats + Number(i.fats),
+            carbs: acc.carbs + Number(i.carbs),
+          }),
+          { calories: 0, proteins: 0, fats: 0, carbs: 0 },
+        );
+
+      const user = await app.prisma.user.findUnique({
+        where: { id: req.userId },
+        select: {
+          goalType: true,
+          dailyCalorieGoal: true,
+          proteinTargetG: true,
+          fatTargetG: true,
+          carbTargetG: true,
+        },
+      });
+
+      const r = (n: number) => Math.round(n);
+      const goal = user?.goalType ?? 'поддержание формы';
+      const target =
+        user?.dailyCalorieGoal != null
+          ? `${user.dailyCalorieGoal} ккал (Б: ${user.proteinTargetG ?? '—'}г, Ж: ${user.fatTargetG ?? '—'}г, У: ${user.carbTargetG ?? '—'}г)`
+          : 'норма не задана';
+
+      const userMsg = `Пользователь за день съел: всего ${r(totals.calories)} ккал (Белки: ${r(totals.proteins)}г, Жиры: ${r(totals.fats)}г, Углеводы: ${r(totals.carbs)}г). Цель пользователя: ${goal}, ${target}. Дай краткую рекомендацию на завтра в 3-4 предложениях. Напиши, чего не хватило и что добавить.`;
+
+      const recommendation = await app.groq.recommend(
+        'Ты — дружелюбный нутрициолог. Отвечай по-русски, тёплым тоном, кратко (3-4 предложения), без markdown и без списков.',
+        userMsg,
+      );
+
+      return reply.send({
+        recommendation,
+        totals: {
+          calories: r(totals.calories),
+          proteins: r(totals.proteins),
+          fats: r(totals.fats),
+          carbs: r(totals.carbs),
         },
       });
     },

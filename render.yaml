@@ -40,6 +40,9 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      # Groq key for AI food parsing + recommendations (console.groq.com/keys)
+      - key: GROQ_API_KEY
+        sync: false
       # Your Vercel origin, e.g. https://weightcalc.vercel.app
       - key: CORS_ORIGIN
         sync: false

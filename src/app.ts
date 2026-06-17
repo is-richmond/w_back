@@ -7,11 +7,14 @@ import { env, isProd } from './config/env.js';
 import prismaPlugin from './plugins/prisma.js';
 import authPlugin from './plugins/auth.js';
 import resendPlugin from './plugins/resend.js';
+import groqPlugin from './plugins/groq.js';
 import { AuthError } from './modules/auth/auth.service.js';
+import { ApiError } from './lib/errors.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import weightRoutes from './modules/weight/weight.routes.js';
 import mealsRoutes from './modules/meals/meals.routes.js';
 import analyticsRoutes from './modules/analytics/analytics.routes.js';
+import profileRoutes from './modules/profile/profile.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -33,13 +36,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(prismaPlugin);
   await app.register(authPlugin);
   await app.register(resendPlugin);
+  await app.register(groqPlugin);
 
   // ── Centralised error handling ─────────────────────────────────────
   app.setErrorHandler((error: FastifyError, req, reply) => {
-    if (error instanceof AuthError) {
+    if (error instanceof AuthError || error instanceof ApiError) {
       return reply.code(error.statusCode).send({
         statusCode: error.statusCode,
-        error: 'AuthError',
+        error: error.name,
         message: error.message,
       });
     }
@@ -66,6 +70,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(
     async (v1) => {
       await v1.register(authRoutes, { prefix: '/auth' });
+      await v1.register(profileRoutes, { prefix: '/profile' });
       await v1.register(weightRoutes, { prefix: '/weight' });
       await v1.register(mealsRoutes, { prefix: '/meals' });
       await v1.register(analyticsRoutes, { prefix: '/analytics' });

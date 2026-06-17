@@ -23,10 +23,21 @@ const EnvSchema = Type.Object({
 
   RESEND_API_KEY: Type.String({ minLength: 1 }),
   EMAIL_FROM: Type.String({ minLength: 1 }),
+
+  // Groq (Llama inference). Optional: AI features 503 until a key is set,
+  // the rest of the app keeps working.
+  GROQ_API_KEY: Type.Optional(Type.String()),
+  GROQ_MODEL: Type.String({ default: 'llama-3.1-8b-instant' }),
 });
 
-// Coerce strings → numbers/booleans where the schema expects them.
-const raw = Value.Convert(EnvSchema, { ...process.env });
+// Fill in schema defaults for vars the host doesn't set (e.g. HOST), then
+// coerce strings → numbers where the schema expects them. (Convert alone does
+// not apply defaults, so missing-but-defaulted vars would fail validation.)
+const withDefaults = Value.Default(EnvSchema, { ...process.env }) as Record<
+  string,
+  unknown
+>;
+const raw = Value.Convert(EnvSchema, withDefaults);
 
 if (!Value.Check(EnvSchema, raw)) {
   const errors = [...Value.Errors(EnvSchema, raw)]
@@ -48,6 +59,8 @@ export const env = raw as {
   JWT_INITIATION_SECRET: string;
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
+  GROQ_API_KEY?: string;
+  GROQ_MODEL: string;
 };
 
 export const isProd = env.NODE_ENV === 'production';
